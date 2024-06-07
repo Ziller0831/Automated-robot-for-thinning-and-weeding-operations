@@ -4,6 +4,6 @@
         <param name="device_name" value="Xbox Series X Controller" />
     </node>
     <node pkg="gamepad_controller" exec="joy_controller" />
-    <node pkg="micro_ros_agent" exec="micro_ros_agent" args="serial --dev /dev/ttyUSB0"
+    <node pkg="micro_ros_agent" exec="micro_ros_agent" args="serial --dev /dev/NodeMCU32S"
         output="screen" />
 </launch>   
