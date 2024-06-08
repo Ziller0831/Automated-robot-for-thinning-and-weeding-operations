@@ -6,19 +6,19 @@ from time import sleep
 ser = serial.Serial('/dev/MEGA2560', 115200, timeout=1)  # open serial port
 sleep(2)
 
-gcodes = []
-gcodes.append('G28')
-gcodes.append('G01 Z-570')
 
-
-class DeltaPub(Node):
+class CoordinateSub(Node):
     def __init__(self):
-        super().__init__("DeltaPub")
+        super().__init__("CoordinateSub")
+        # self.subscriber_ = self.create_subscription(
+        #     Joy,
+        #     'joy',
+        #     self.listener_callback,
+        #     10)
 
 
-def main():
+def Delta_communication(gcodes):
     for gcode in gcodes:
-        print(gcode)
         ser.write((gcode + '\n').encode())
         while 1:
             response = ser.readline()
@@ -26,7 +26,16 @@ def main():
             if (response.find('Ok'.encode()) > -1):
                 break
             elif (response.find('Unknown'.encode()) > -1):
+                print("Unknown: Limit Exceeded")
                 break
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    gcodes = []
+    gcodes.append('G28')
+    gcodes.append('G01 Z-570')
 
 
 ser.close()             # close port

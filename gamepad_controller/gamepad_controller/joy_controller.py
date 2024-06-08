@@ -11,7 +11,7 @@ joyMotionCommand = JoyMotionCommand()
 class JoyBasePublisher(Node):
     def __init__(self):
         super().__init__("joy_base_publisher")
-        timer_period = 0.1
+        timer_period = 0.5
         self.publisher_ = self.create_publisher(
             JoyMotionCommand, "joy_command", 10)
         self.timer = self.create_timer(timer_period, self.timer_callback)
@@ -48,8 +48,8 @@ class JoySubscriber(Node):
             joyMotionCommand.linear_x = round(-linear_x, 2)
 
         # * 轉彎功能
-        joyMotionCommand.center_rotate_angle = linear_mapping(
-            round(joy_data.axes[0], 2), -1, 1, 40, -40)
+        joyMotionCommand.center_rotate_angle = round(linear_mapping(
+            joy_data.axes[0], -1, 1, -40, 40), 1)
 
         # * 轉彎模態切換
         if joy_data.buttons[0] == 1 and self.button1_flag == True:
