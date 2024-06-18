@@ -11,7 +11,7 @@ joyMotionCommand = JoyMotionCommand()
 class JoyBasePublisher(Node):
     def __init__(self):
         super().__init__("joy_base_publisher")
-        timer_period = 0.5
+        timer_period = 0.01
         self.publisher_ = self.create_publisher(
             JoyMotionCommand, "joy_command", 10)
         self.timer = self.create_timer(timer_period, self.timer_callback)
@@ -27,30 +27,13 @@ class JoySubscriber(Node):
         self.subscriber_ = self.create_subscription(
             Joy,
             'joy',
-            self.listener_callback,
+            self.sub_callback,
             10)
         self.turning_mode = 0
         self.button1_flag = True
         self.vel_direction = True
 
-    def listener_callback(self, joy_data):
-        # * 轉速與正反轉處理
-        linear_x = linear_mapping(joy_data.axes[4], 1, -1, 0, 2)
-
-        if joy_data.buttons[6] == 1 and linear_x == 0:
-            self.vel_direction = False
-        elif joy_data.buttons[7] == 1 and linear_x == 0:
-            self.vel_direction = True
-
-        if self.vel_direction == True:
-            joyMotionCommand.linear_x = round(linear_x, 2)
-        elif self.vel_direction == False:
-            joyMotionCommand.linear_x = round(-linear_x, 2)
-
-        # * 轉彎功能
-        joyMotionCommand.center_rotate_angle = round(linear_mapping(
-            joy_data.axes[0], -1, 1, -40, 40), 1)
-
+    def sub_callback(self, joy_data):
         # * 轉彎模態切換
         if joy_data.buttons[0] == 1 and self.button1_flag == True:
             self.turning_mode = not (self.turning_mode)
@@ -59,6 +42,26 @@ class JoySubscriber(Node):
             self.button1_flag = True
 
         joyMotionCommand.turning_mode = self.turning_mode
+
+        # * Ackerman
+        if self.turning_mode == 0:
+            # * 轉速與正反轉處理
+            linear_x = linear_mapping(joy_data.axes[4], 1, -1, 0, 1)
+
+            if joy_data.buttons[6] == 1 and linear_x == 0:
+                self.vel_direction = False
+            elif joy_data.buttons[7] == 1 and linear_x == 0:
+                self.vel_direction = True
+
+            if self.vel_direction == True:
+                joyMotionCommand.linear_x = round(linear_x, 2)
+            elif self.vel_direction == False:
+                joyMotionCommand.linear_x = round(-linear_x, 2)
+            # * 轉彎功能
+            joyMotionCommand.center_rotate_angle = round(linear_mapping(
+                joy_data.axes[0], -1, 1, -40, 40), 1)
+        elif self.turning_mode == 1:  # * 自轉
+            joyMotionCommand.center_rotate_angle = round(joy_data.axes[0], 1)
 
 
 def main(args=None):

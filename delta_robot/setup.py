@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'delta_robot_communication'
+package_name = 'delta_robot'
 
 setup(
     name=package_name,
@@ -20,7 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'DeltaRobot_API = delta_robot_communication.DeltaRobot_API:main'
+            'delta_robot_api = delta_robot.DeltaRobot_API:main',
+            'trajectory_plan = delta_robot.Trajectory_plan:main'
         ],
     },
 )
