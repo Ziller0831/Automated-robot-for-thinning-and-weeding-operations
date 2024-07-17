@@ -1,5 +1,6 @@
 # 智慧除草機器人
 該專案執行人為高科大同步工程設計實驗室團隊。
+![CAD](https://github.com/user-attachments/assets/5b1d2555-ca4f-4bdb-a027-cc5b6369b484)
 
 ## 關於Delta機械手臂
 這台除草機器人的Delta手臂參考了IMWI公司的開源項目https://github.com/deltaxrobot/Delta-X-Firmware.git ，並更改了一些設計，規格如下：
