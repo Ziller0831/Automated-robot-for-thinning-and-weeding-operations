@@ -15,9 +15,10 @@
 ![image](https://github.com/user-attachments/assets/25fc2953-217c-4682-bfc0-f6abb7078b16)
 
 ## 關於底盤控制
-底盤設計為2 Wheel Drive - 2 Wheel Steer，即2輪驅動轉向設計，驅動馬達為13 inch的BLDC輪鼓馬達，轉向馬達為57型閉迴路步進馬達，控制器使用NodeMCU-32S單晶片。
+底盤設計為2 Wheel Drive - 2 Wheel Steer，即2輪驅動轉向設計，驅動馬達為13吋的BLDC輪鼓馬達，轉向馬達為57型閉迴路步進馬達，控制器使用NodeMCU-32S單晶片，通訊上使用MicroROS。
 
-ESP32程式放在另一個Repository: [Ziller0831/4WD4WS](https://github.com/Ziller0831/ROS2_4WS/tree/3db7d8452c3a13d7f19f9634dbf2a732f82ec4f9/4WD4WS)
+ESP32程式放在另一個Repository: [Ziller0831/MicroROS_2WD-2WS
+](https://github.com/Ziller0831/MicroROS_2WD-2WS)
 
 ## 關於上位機
 本機器人的上位機採用LattePanda Delta，規格如下：
@@ -48,6 +49,7 @@ src
 手臂的運作架構如下：
 
 ![繪圖1](https://github.com/user-attachments/assets/11db749c-05c4-42e9-8849-4ee6a3657f4f)
+
 上下位機溝通使用Pyserial進行傳輸，由上位機整合好的GCode命令通過Serial Port的形式發送至下位機。
 
 ## 操作
