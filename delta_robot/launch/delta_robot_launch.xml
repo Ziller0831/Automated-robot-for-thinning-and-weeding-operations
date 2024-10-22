@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<launch>
+    <node pkg="delta_robot" exec="delta_robot_api" output="screen" />
+    <node pkg="delta_robot" exec="trajectory_plan" />
+</launch>   

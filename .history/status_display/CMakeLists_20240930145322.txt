@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(customize_interface)
+project(status_display)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -7,14 +7,18 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
-find_package(builtin_interfaces REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(customize_interface REQUIRED)
 
-rosidl_generate_interfaces(${PROJECT_NAME}
-	"msg/MotionCommand.msg"
-  "msg/JoyMotionCommand.msg"
-  "msg/SystemStatus.msg"
-  DEPENDENCIES builtin_interfaces
+find_package(Qt5 REQUIRED COMPONENTS Widgets)
+
+add_executable(sys_status_display src/sys_status_display.cpp)
+target_link_libraries(sys_status_display Qt5::Widgets)
+ament_target_dependencies(sys_status_display rclcpp customize_interface)
+
+install(TARGETS
+  sys_status_display
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)

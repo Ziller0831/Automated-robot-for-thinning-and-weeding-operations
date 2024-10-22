@@ -8,10 +8,6 @@ from sensor_msgs.msg import Joy
 joyMotionCommand = JoyMotionCommand()
 
 
-def linear_mapping(value, in_min, in_max, out_min, out_max):
-    return round((value-in_min) * (out_max-out_min) / (in_max-in_min) + out_min, 2)
-
-
 class joyController(Node):
     def __init__(self):
         super().__init__("joy_controller")
@@ -28,6 +24,7 @@ class joyController(Node):
 
         self.joy_publisher = self.create_publisher(
             JoyMotionCommand, "joy_command", 10)
+        self.timer = self.create_timer(0.1, self.timer_callback)
 
     def joy_callback(self, joy_data):
         # * 轉彎模態切換
@@ -63,20 +60,18 @@ class joyController(Node):
             joyMotionCommand.center_rotate_angle = linear_mapping(
                 joy_data.axes[0], -1, 1, 2, -2)
 
-        self.joy_publisher.publish(joyMotionCommand)  
-
-    def destroy_node(self):
-        joyMotionCommand.linear_x = 0.0
-        joyMotionCommand.center_rotate_angle = 0.0
-        super().destroy_node()
+    def timer_callback(self):
+        global joyMotionCommand
+        self.joy_publisher.publish(joyMotionCommand)
 
 
 def main(args=None):
     rclpy.init(args=args)
-    node = joyController()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
-    node.destroy_node()
+    joy_controller = joyController()
+    rclpy.spin(joy_controller)
+    joy_controller.destroy_node()
     rclpy.shutdown()
+
+
+def linear_mapping(value, in_min, in_max, out_min, out_max):
+    return round((value-in_min) * (out_max-out_min) / (in_max-in_min) + out_min, 2)
