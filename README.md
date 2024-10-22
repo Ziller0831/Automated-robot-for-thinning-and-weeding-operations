@@ -1,5 +1,5 @@
 # 智慧除草機器人
-##Automated robot for thinning and weeding operations
+## Automated robot for thinning and weeding operations
 該專案執行人為高科大同步工程設計實驗室團隊。
 ![CAD](https://github.com/user-attachments/assets/5b1d2555-ca4f-4bdb-a027-cc5b6369b484)
 
