@@ -20,7 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'plant_detector = plant_detection.plant_detection:main'
+            'plant_detector = plant_detection.plant_detection:main',
+            'photo_pub = plant_detection.photo_pub:main'
         ],
     },
 )

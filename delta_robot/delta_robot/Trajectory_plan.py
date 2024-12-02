@@ -4,8 +4,6 @@ from pandas import read_csv
 from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 
-cord_array = Float32MultiArray()
-
 # csv_path = "/home/ced/Image_recognition_ws/output/keypoints_3d.csv"
 
 
@@ -28,21 +26,23 @@ class TrajectoryPlanNode(Node):
         self.get_logger().info(f'Plant cord: {msg.data}')
         self.planed_cord = self.__trajectory_plan(msg.data)
 
-        cord_array.layout.dim.append(MultiArrayDimension())
+        # 建構Float32MultiArray消息
+        cord_array = Float32MultiArray()
+
         cord_array.layout.dim.append(MultiArrayDimension())
 
         cord_array.layout.dim[0].label = "group"
         cord_array.layout.dim[1].label = "coordinate"
-        cord_array.layout.dim[0].size = len(planed_cord)
-        cord_array.layout.dim[1].size = len(planed_cord[0])
+        cord_array.layout.dim[0].size = len(self.planed_cord)
+        cord_array.layout.dim[1].size = len(self.planed_cord[0])
         cord_array.layout.dim[0].stride = len(
-            planed_cord) * len(planed_cord[0])
-        cord_array.layout.dim[1].stride = len(planed_cord[0])
+            self.planed_cord) * len(self.planed_cord[0])
+        cord_array.layout.dim[1].stride = len(self.planed_cord[0])
 
         cord_array.layout.data_offset = 0
 
         flat_array = [
-            float(item) for sublist in planed_cord for item in sublist]
+            float(item) for sublist in self.planed_cord for item in sublist]
         cord_array.data = flat_array
 
         self.cord_publisher.publish(cord_array)
