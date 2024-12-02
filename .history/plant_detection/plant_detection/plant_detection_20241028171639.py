@@ -9,7 +9,7 @@ from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
-remove_plants = Float32MultiArray()
+img_input = r"C:\Users\HYM\Desktop\image_recognition_code_csme\image_recognition\IMG_file"
 
 MODEL_PATH = "/home/ced/Image_recognition_ws/datasets/model/train134/weights/best.pt"
 
@@ -23,12 +23,8 @@ class PlantDetectNode(Node):
         self.model = YOLO(MODEL_PATH)
         self.colors = self.__generate_colors()
 
-        # self.img_subscriber = self.create_subscription(
-        #     Image, '/agric_robot/D455/color/image_raw', self.image_callback, 10)
-
-        # ! 測試用
         self.img_subscriber = self.create_subscription(
-            Image, 'image_raw', self.image_callback, 10)
+            Image, '/agric_robot/D455/color/image_raw', self.image_callback, 10)
 
         self.cord_publisher = self.create_publisher(
             Float32MultiArray, 'plant_cord', 10)
@@ -36,43 +32,24 @@ class PlantDetectNode(Node):
             Image, 'plant_segmentation', 10)
 
     def image_callback(self, msg):
-        self.get_logger().info(f"Processing...")
         image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-        yolo_results = self.model.predict(image, save=False, stream=False)
+        yolo_results = self.model.predict(image, save=True, stream=True)
 
-        # @ 輸出YOLO辨識框
-        # for result in yolo_results:
-        #     for box in result.boxes:
-        #         # 解析檢測框數據
-        #         x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-        #         cls = int(box.cls[0].tolist())
-        #         conf = box.conf[0].tolist()
-        #         label = f"{cls}: {conf:.2f}"
-
-        #         # 繪製檢測框和標籤
-        #         cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        #         cv2.putText(image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX,
-        #                     0.5, (0, 255, 0), 2)
-        # self.img_publisher.publish(
-        #     self.bridge.cv2_to_imgmsg(image, "bgr8"))
-
-        # @ 學彥整套流程
         obj_cords = self.__extract_obj_cords(yolo_results)
         if not obj_cords:
             self.get_logger().info(f"未檢測到任何植物")
             return
 
-        segment_objs = self.__segment_objects(image, obj_cords)
+        segment_objs = self.__segment_objects(obj_cords)
         filtered_plants, removed_plants, weeds = self.__thinning_algorithm(
             segment_objs, self.thinning_radius)
 
         result_img = self.__result_display(
             image, obj_cords, filtered_plants, removed_plants, weeds)
-        self.img_publisher.publish(
-            self.bridge.cv2_to_imgmsg(result_img, "bgr8"))
+
+        self.img_publisher(self.bridge.cv2_to_imgmsg(result_img, "bgr8"))
 
     # * 色卡
-
     def __generate_colors(self):
         colors = [
             (0, 255, 0),    # Green
@@ -85,7 +62,7 @@ class PlantDetectNode(Node):
         plant_cord = [[100, 100, -550]]
         return plant_cord
 
-    def __extract_obj_cords(self, yolo_results: list):
+    def __extract_obj_cords(self, yolo_results):
         obj_cords = {}
         for result in yolo_results:
             if result:
@@ -112,7 +89,7 @@ class PlantDetectNode(Node):
                     }
         return obj_cords
 
-    def __segment_objects(self, img: np.ndarray, obj_cords: list):
+    def __segment_objects(self, img, obj_cords):
         segment_objs = []
         color = self.colors[2]
 
@@ -176,7 +153,7 @@ class PlantDetectNode(Node):
 
         return segment_objs
 
-    def __thinning_algorithm(self, segment_objs: list, radius: float):
+    def __thinning_algorithm(self, segment_objs, radius):
         plants = []
         weeds = []
         for segment_obj in segment_objs:
@@ -219,7 +196,7 @@ class PlantDetectNode(Node):
 
             return np.array(best_filtered_plants), np.array(best_removed_plants), weeds
 
-    def __result_display(self, img: np.ndarray, obj_cords: list, filtered_plants: list, removed_plants: list, weeds: list):
+    def __result_display(self, img, obj_cords, filtered_plants, removed_plants, weeds):
         for _, obj_cord in obj_cords.items():
             x = int(obj_cord['x'])
             y = int(obj_cord['y'])
@@ -258,7 +235,3 @@ def main(args=None):
         pass
     node.destroy_node()
     rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()

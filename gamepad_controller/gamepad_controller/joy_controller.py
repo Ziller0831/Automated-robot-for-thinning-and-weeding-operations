@@ -63,7 +63,7 @@ class joyController(Node):
             joyMotionCommand.center_rotate_angle = linear_mapping(
                 joy_data.axes[0], -1, 1, 2, -2)
 
-        self.joy_publisher.publish(joyMotionCommand)  
+        self.joy_publisher.publish(joyMotionCommand)
 
     def destroy_node(self):
         joyMotionCommand.linear_x = 0.0
