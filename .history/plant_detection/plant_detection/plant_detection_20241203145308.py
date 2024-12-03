@@ -56,7 +56,7 @@ class PlantDetectNode(Node):
         self.cord_publisher = self.create_publisher(
             Float32MultiArray, 'plant_cord', 10)
         self.img_publisher = self.create_publisher(
-            Image, 'result_img', 10)
+            Image, 'plant_segmentation', 10)
 
     def image_callback(self, msg):
         self.get_logger().info(f"Processing...")
@@ -97,22 +97,30 @@ class PlantDetectNode(Node):
         removed_targets = np.concatenate((weeds, removed_plants))
 
         cord_array = Float32MultiArray()
-        cord_array.layout.dim = [MultiArrayDimension(), MultiArrayDimension()]
-
-        # dim[0] is the vertical dimension of your matrix
-        cord_array.layout.dim[0].label = "group"
-        cord_array.layout.dim[0].size = len(removed_targets)
-        cord_array.layout.dim[0].stride = len(
-            removed_targets) * len(removed_targets[0])
-        # dim[1] is the horizontal dimension of your matrix
-        cord_array.layout.dim[1].label = "coordinate"
-        cord_array.layout.dim[1].size = len(removed_targets[0])
-        cord_array.layout.dim[1].stride = len(removed_targets[0])
-
-        cord_array.layout.data_offset = 0
-
+        cord_array.layout = self.__create_multiarray_layout(
+            len(removed_targets),
+            len(removed_targets[0])
+        )
         cord_array.data = self.__flatten_2d_array(removed_targets)
         self.cord_publisher.publish(cord_array)
+
+    def __create_multiarray_layout(self, groups: int, coords_per_group: int):
+        """
+        Helper function to create the layout for Float32MultiArray.
+
+        :param groups: Number of groups (outer dimension)
+        :param coords_per_group: Number of coordinates per group (inner dimension)
+        :return: A populated layout object
+        """
+        layout = Float32MultiArray._layout()
+        layout.dim.append(MultiArrayDimension(label="group",
+                                              size=groups,
+                                              stride=groups * coords_per_group))
+        layout.dim.append(MultiArrayDimension(label="coordinate",
+                                              size=coords_per_group,
+                                              stride=coords_per_group))
+        layout.data_offset = 0
+        return layout
 
     def __flatten_2d_array(self, array: list[list[float]]) -> list[float]:
         """

@@ -101,15 +101,13 @@ class PlantDetectNode(Node):
 
         # dim[0] is the vertical dimension of your matrix
         cord_array.layout.dim[0].label = "group"
-        cord_array.layout.dim[0].size = len(removed_targets)
+        cord_array.layout.dim[0].size = len(self.planed_cord)
         cord_array.layout.dim[0].stride = len(
-            removed_targets) * len(removed_targets[0])
+            self.planed_cord) * len(self.planed_cord[0])
         # dim[1] is the horizontal dimension of your matrix
         cord_array.layout.dim[1].label = "coordinate"
-        cord_array.layout.dim[1].size = len(removed_targets[0])
-        cord_array.layout.dim[1].stride = len(removed_targets[0])
-
-        cord_array.layout.data_offset = 0
+        cord_array.layout.dim[1].size = len(self.planed_cord[0])
+        cord_array.layout.dim[1].stride = len(self.planed_cord[0])
 
         cord_array.data = self.__flatten_2d_array(removed_targets)
         self.cord_publisher.publish(cord_array)

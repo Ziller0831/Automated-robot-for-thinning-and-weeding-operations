@@ -41,7 +41,6 @@ class TrajectoryPlanNode(Node):
         cord_array.layout.dim[1].label = "coordinate"
         cord_array.layout.dim[1].size = len(self.planed_cord[0])
         cord_array.layout.dim[1].stride = len(self.planed_cord[0])
-
         cord_array.data = self.__flatten_2d_array(self.planed_cord)
 
         # Publish the constructed message

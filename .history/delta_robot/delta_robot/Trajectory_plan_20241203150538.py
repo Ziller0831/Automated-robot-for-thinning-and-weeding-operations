@@ -33,15 +33,10 @@ class TrajectoryPlanNode(Node):
         cord_array = Float32MultiArray()
         cord_array.layout.dim = [MultiArrayDimension(), MultiArrayDimension()]
 
-        cord_array.layout.dim[0].label = "group"
-        cord_array.layout.dim[0].size = len(self.planed_cord)
-        cord_array.layout.dim[0].stride = len(
-            self.planed_cord) * len(self.planed_cord[0])
-
-        cord_array.layout.dim[1].label = "coordinate"
-        cord_array.layout.dim[1].size = len(self.planed_cord[0])
-        cord_array.layout.dim[1].stride = len(self.planed_cord[0])
-
+        cord_array.layout = self.__create_multiarray_layout(
+            len(self.planed_cord),
+            len(self.planed_cord[0])
+        )
         cord_array.data = self.__flatten_2d_array(self.planed_cord)
 
         # Publish the constructed message

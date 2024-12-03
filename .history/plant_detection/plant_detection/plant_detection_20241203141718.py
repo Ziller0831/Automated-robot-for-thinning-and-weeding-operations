@@ -56,7 +56,7 @@ class PlantDetectNode(Node):
         self.cord_publisher = self.create_publisher(
             Float32MultiArray, 'plant_cord', 10)
         self.img_publisher = self.create_publisher(
-            Image, 'result_img', 10)
+            Image, 'plant_segmentation', 10)
 
     def image_callback(self, msg):
         self.get_logger().info(f"Processing...")
@@ -94,25 +94,35 @@ class PlantDetectNode(Node):
         self.img_publisher.publish(
             self.bridge.cv2_to_imgmsg(result_img, "bgr8"))
 
-        removed_targets = np.concatenate((weeds, removed_plants))
+        # removed_targets = weeds + removed_plants
 
-        cord_array = Float32MultiArray()
-        cord_array.layout.dim = [MultiArrayDimension(), MultiArrayDimension()]
+        print(list(weeds)
+        print("")
+        print(removed_plants)
 
-        # dim[0] is the vertical dimension of your matrix
-        cord_array.layout.dim[0].label = "group"
-        cord_array.layout.dim[0].size = len(removed_targets)
-        cord_array.layout.dim[0].stride = len(
-            removed_targets) * len(removed_targets[0])
-        # dim[1] is the horizontal dimension of your matrix
-        cord_array.layout.dim[1].label = "coordinate"
-        cord_array.layout.dim[1].size = len(removed_targets[0])
-        cord_array.layout.dim[1].stride = len(removed_targets[0])
+        # cord_array = Float32MultiArray()
+        # cord_array.layout = self.__create_multiarray_layout(
+        #     len(removed_plants),
+        #     len(removed_plants[0])
+        # )
 
-        cord_array.layout.data_offset = 0
+    def __create_multiarray_layout(self, groups: int, coords_per_group: int):
+        """
+        Helper function to create the layout for Float32MultiArray.
 
-        cord_array.data = self.__flatten_2d_array(removed_targets)
-        self.cord_publisher.publish(cord_array)
+        :param groups: Number of groups (outer dimension)
+        :param coords_per_group: Number of coordinates per group (inner dimension)
+        :return: A populated layout object
+        """
+        layout=Float32MultiArray._layout_type()
+        layout.dim.append(MultiArrayDimension(label="group",
+                                              size=groups,
+                                              stride=groups * coords_per_group))
+        layout.dim.append(MultiArrayDimension(label="coordinate",
+                                              size=coords_per_group,
+                                              stride=coords_per_group))
+        layout.data_offset=0
+        return layout
 
     def __flatten_2d_array(self, array: list[list[float]]) -> list[float]:
         """
@@ -129,7 +139,7 @@ class PlantDetectNode(Node):
 
         :return: A list of colors
         """
-        colors = [
+        colors=[
             (0, 255, 0),    # Green
             (0, 0, 255),    # Red
             (255, 0, 0)     # Blue
@@ -143,19 +153,19 @@ class PlantDetectNode(Node):
         :param yolo_results: A list of YOLO results
         :return: A dictionary of object coordinates
         """
-        obj_cords = {}
+        obj_cords={}
         for result in yolo_results:
             if result:
                 for idx, box in enumerate(result.boxes):
-                    x, y, w, h = box.xywh[0].tolist()
-                    bx1, by1, bx2, by2 = box.xyxy[0].tolist()
-                    cls = int(box.cls[0].tolist())
+                    x, y, w, h=box.xywh[0].tolist()
+                    bx1, by1, bx2, by2=box.xyxy[0].tolist()
+                    cls=int(box.cls[0].tolist())
 
-                    obj_name = f"object_{idx + 1}"
+                    obj_name=f"object_{idx + 1}"
                     # centroid_x = int(x + w / 2)
                     # centroid_y = int(y + h / 2)
 
-                    obj_cords[obj_name] = {
+                    obj_cords[obj_name]={
                         "x": x,
                         "y": y,
                         "w": w,
@@ -177,28 +187,28 @@ class PlantDetectNode(Node):
         :param obj_cords: A list of object coordinates
         :return: A list of segmented objects
         """
-        segment_objs = []
+        segment_objs=[]
 
         for obj_name, obj_cord in obj_cords.items():
-            x = int(obj_cord["x"])
-            y = int(obj_cord["y"])
-            w = int(obj_cord["w"])
-            h = int(obj_cord["h"])
+            x=int(obj_cord["x"])
+            y=int(obj_cord["y"])
+            w=int(obj_cord["w"])
+            h=int(obj_cord["h"])
 
-            x1 = int(x - w / 2)
-            y1 = int(y - h / 2)
-            x2 = int(x + w / 2)
-            y2 = int(y + h / 2)
+            x1=int(x - w / 2)
+            y1=int(y - h / 2)
+            x2=int(x + w / 2)
+            y2=int(y + h / 2)
 
-            x1 = max(0, x1)
-            y1 = max(0, y1)
-            x2 = min(img.shape[1], x2)
-            y2 = min(img.shape[0], y2)
+            x1=max(0, x1)
+            y1=max(0, y1)
+            x2=min(img.shape[1], x2)
+            y2=min(img.shape[0], y2)
 
-            cls = obj_cord['class']
+            cls=obj_cord['class']
 
             # * 從原始影像中切割出植物的部分
-            crop_img = img[y1:y2, x1:x2]
+            crop_img=img[y1:y2, x1:x2]
 
             # * La*b* 二值化
             # @ 使用plantCV
@@ -210,26 +220,26 @@ class PlantDetectNode(Node):
             #     img=crop_img, mask=fill_img, mask_color='black')
 
             # @ 使用OpenCV
-            lab_img = cv2.cvtColor(crop_img, cv2.COLOR_BGR2LAB)
-            alpha_channel_img = lab_img[:, :, 1]
-            _, binary_img = cv2.threshold(
+            lab_img=cv2.cvtColor(crop_img, cv2.COLOR_BGR2LAB)
+            alpha_channel_img=lab_img[:, :, 1]
+            _, binary_img=cv2.threshold(
                 alpha_channel_img, 123, 255, cv2.THRESH_BINARY_INV)
-            kernel = np.ones((3, 3), np.uint8)
-            fill_img = cv2.morphologyEx(binary_img, cv2.MORPH_CLOSE, kernel)
+            kernel=np.ones((3, 3), np.uint8)
+            fill_img=cv2.morphologyEx(binary_img, cv2.MORPH_CLOSE, kernel)
             # mask_img = cv2.bitwise_and(crop_img, crop_img, mask=fill_img)
             # mask_inv = cv2.bitwise_not(fill_img)
             # black_background_img = cv2.add(
             #     crop_img, np.zeros_like(crop_img), mask=mask_inv)
 
-            contours, _ = cv2.findContours(
+            contours, _=cv2.findContours(
                 fill_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_KCOS)
 
             if contours:
-                max_contour = max(contours, key=cv2.contourArea)
-                moment = cv2.moments(max_contour)
+                max_contour=max(contours, key=cv2.contourArea)
+                moment=cv2.moments(max_contour)
                 if moment["m00"] != 0:
-                    center_x = int(moment["m10"] / moment["m00"])
-                    center_y = int(moment["m01"] / moment["m00"])
+                    center_x=int(moment["m10"] / moment["m00"])
+                    center_y=int(moment["m01"] / moment["m00"])
                     segment_objs.append({
                         'class': cls,
                         'x': x1 + center_x,
@@ -246,47 +256,49 @@ class PlantDetectNode(Node):
         :param radius: The radius for thinning
         :return: A tuple of saved plants, removed plants, and weeds
         """
-        plants = []
-        weeds = []
+        plants=[]
+        weeds=[]
         for segment_obj in segment_objs:
             if segment_obj['class'] == 0:
                 plants.append(segment_obj)
             elif segment_obj['class'] == 1:
-                weeds.append([segment_obj['x'], segment_obj['y']])
+                weeds.append(segment_obj)
 
-        cx_list = []
-        cy_list = []
+
+
+        cx_list=[]
+        cy_list=[]
         for plant in plants:
             cx_list.append(plant['x'])
             cy_list.append(plant['y'])
 
-        random_points = np.column_stack((cx_list, cy_list))
+        random_points=np.column_stack((cx_list, cy_list))
 
-        sorting_methods = [
+        sorting_methods=[
             lambda point: (point[0], point[1]),
             lambda point: (-point[0], point[1]),
             lambda point: (point[1], point[0]),
             lambda point: (-point[1], -point[1])
         ]
-        max_points = 0
-        best_saved_plants = None
-        best_removed_plants = None
+        max_points=0
+        best_saved_plants=None
+        best_removed_plants=None
 
         for sorting_method in sorting_methods:
-            sorted_random_points = sorted(random_points, key=sorting_method)
-            saved_plants = []
-            removed_plants = []
+            sorted_random_points=sorted(random_points, key=sorting_method)
+            saved_plants=[]
+            removed_plants=[]
             for point in sorted_random_points:
                 if all(np.linalg.norm(point - other_point) >= radius for other_point in saved_plants):
                     saved_plants.append(point)
                 else:
                     removed_plants.append(point)
             if len(saved_plants) > max_points:
-                max_points = len(saved_plants)
-                best_saved_plants = saved_plants
-                best_removed_plants = removed_plants
+                max_points=len(saved_plants)
+                best_saved_plants=saved_plants
+                best_removed_plants=removed_plants
 
-            return np.array(best_saved_plants), np.array(best_removed_plants), np.array(weeds)
+            return np.array(best_saved_plants), np.array(best_removed_plants), weeds
 
     def __result_display(self, img: np.ndarray, obj_cords: list, saved_plants: list, removed_plants: list, weeds: list):
         """
@@ -300,15 +312,15 @@ class PlantDetectNode(Node):
         :return: The image with results
         """
         for _, obj_cord in obj_cords.items():
-            x = int(obj_cord['x'])
-            y = int(obj_cord['y'])
-            bx1 = int(obj_cord['bx1'])
-            bx2 = int(obj_cord['bx2'])
-            by1 = int(obj_cord['by1'])
-            by2 = int(obj_cord['by2'])
-            cls = obj_cord['class']
+            x=int(obj_cord['x'])
+            y=int(obj_cord['y'])
+            bx1=int(obj_cord['bx1'])
+            bx2=int(obj_cord['bx2'])
+            by1=int(obj_cord['by1'])
+            by2=int(obj_cord['by2'])
+            cls=obj_cord['class']
 
-            color = self.colors[cls]
+            color=self.colors[cls]
 
             cv2.rectangle(img, (bx1, by1), (bx2, by2), color, 2)
             if cls == 0:
@@ -323,14 +335,14 @@ class PlantDetectNode(Node):
         for plant in removed_plants:
             cv2.circle(img, (plant[0], plant[1]), 5, self.colors[1], -1)
         for weed in weeds:
-            cv2.circle(img, (weed[0], weed[1]), 5, self.colors[2], -1)
+            cv2.circle(img, (weed['x'], weed['y']), 5, self.colors[2], -1)
 
         return img
 
 
 def main(args=None):
     rclpy.init(args=args)
-    node = PlantDetectNode()
+    node=PlantDetectNode()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

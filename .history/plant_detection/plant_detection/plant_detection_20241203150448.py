@@ -106,10 +106,8 @@ class PlantDetectNode(Node):
             removed_targets) * len(removed_targets[0])
         # dim[1] is the horizontal dimension of your matrix
         cord_array.layout.dim[1].label = "coordinate"
-        cord_array.layout.dim[1].size = len(removed_targets[0])
-        cord_array.layout.dim[1].stride = len(removed_targets[0])
-
-        cord_array.layout.data_offset = 0
+        cord_array.layout.dim[1].size = len(self.planed_cord[0])
+        cord_array.layout.dim[1].stride = len(self.planed_cord[0])
 
         cord_array.data = self.__flatten_2d_array(removed_targets)
         self.cord_publisher.publish(cord_array)

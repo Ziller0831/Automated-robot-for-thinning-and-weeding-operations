@@ -8,7 +8,7 @@ class PlantDetectNode
 |
 +-- def image_callback(self, msg)
 |
-+-- def __create_multiarray_layout(self, groups: int, coords_per_group: int)
++-- def __create_multiarray_layout(self, groups: int, coords_per_group: int) -> Float32MultiArray._layout_type
 |
 +-- def __flatten_2d_array(self, array: list[list[float]]) -> list[float]
 |
@@ -56,7 +56,7 @@ class PlantDetectNode(Node):
         self.cord_publisher = self.create_publisher(
             Float32MultiArray, 'plant_cord', 10)
         self.img_publisher = self.create_publisher(
-            Image, 'result_img', 10)
+            Image, 'plant_segmentation', 10)
 
     def image_callback(self, msg):
         self.get_logger().info(f"Processing...")
@@ -94,25 +94,33 @@ class PlantDetectNode(Node):
         self.img_publisher.publish(
             self.bridge.cv2_to_imgmsg(result_img, "bgr8"))
 
-        removed_targets = np.concatenate((weeds, removed_plants))
+        removed_targets = weeds + removed_plants
 
-        cord_array = Float32MultiArray()
-        cord_array.layout.dim = [MultiArrayDimension(), MultiArrayDimension()]
+        print(removed_targets)
 
-        # dim[0] is the vertical dimension of your matrix
-        cord_array.layout.dim[0].label = "group"
-        cord_array.layout.dim[0].size = len(removed_targets)
-        cord_array.layout.dim[0].stride = len(
-            removed_targets) * len(removed_targets[0])
-        # dim[1] is the horizontal dimension of your matrix
-        cord_array.layout.dim[1].label = "coordinate"
-        cord_array.layout.dim[1].size = len(removed_targets[0])
-        cord_array.layout.dim[1].stride = len(removed_targets[0])
+        # cord_array = Float32MultiArray()
+        # cord_array.layout = self.__create_multiarray_layout(
+        #     len(removed_plants),
+        #     len(removed_plants[0])
+        # )
 
-        cord_array.layout.data_offset = 0
+    def __create_multiarray_layout(self, groups: int, coords_per_group: int):
+        """
+        Helper function to create the layout for Float32MultiArray.
 
-        cord_array.data = self.__flatten_2d_array(removed_targets)
-        self.cord_publisher.publish(cord_array)
+        :param groups: Number of groups (outer dimension)
+        :param coords_per_group: Number of coordinates per group (inner dimension)
+        :return: A populated layout object
+        """
+        layout = Float32MultiArray._layout_type()
+        layout.dim.append(MultiArrayDimension(label="group",
+                                              size=groups,
+                                              stride=groups * coords_per_group))
+        layout.dim.append(MultiArrayDimension(label="coordinate",
+                                              size=coords_per_group,
+                                              stride=coords_per_group))
+        layout.data_offset = 0
+        return layout
 
     def __flatten_2d_array(self, array: list[list[float]]) -> list[float]:
         """
@@ -231,9 +239,10 @@ class PlantDetectNode(Node):
                     center_x = int(moment["m10"] / moment["m00"])
                     center_y = int(moment["m01"] / moment["m00"])
                     segment_objs.append({
-                        'class': cls,
+                        'Object Name': f"{obj_name}_contour",
                         'x': x1 + center_x,
-                        'y': y1 + center_y
+                        'y': y1 + center_y,
+                        'class': cls
                     })
 
         return segment_objs
@@ -252,7 +261,7 @@ class PlantDetectNode(Node):
             if segment_obj['class'] == 0:
                 plants.append(segment_obj)
             elif segment_obj['class'] == 1:
-                weeds.append([segment_obj['x'], segment_obj['y']])
+                weeds.append(segment_obj)
 
         cx_list = []
         cy_list = []
@@ -286,7 +295,7 @@ class PlantDetectNode(Node):
                 best_saved_plants = saved_plants
                 best_removed_plants = removed_plants
 
-            return np.array(best_saved_plants), np.array(best_removed_plants), np.array(weeds)
+            return np.array(best_saved_plants), np.array(best_removed_plants), weeds
 
     def __result_display(self, img: np.ndarray, obj_cords: list, saved_plants: list, removed_plants: list, weeds: list):
         """
@@ -323,7 +332,7 @@ class PlantDetectNode(Node):
         for plant in removed_plants:
             cv2.circle(img, (plant[0], plant[1]), 5, self.colors[1], -1)
         for weed in weeds:
-            cv2.circle(img, (weed[0], weed[1]), 5, self.colors[2], -1)
+            cv2.circle(img, (weed['x'], weed['y']), 5, self.colors[2], -1)
 
         return img
 
