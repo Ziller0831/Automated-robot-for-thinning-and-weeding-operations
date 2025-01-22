@@ -1,7 +1,9 @@
 import rclpy
+import threading
 import numpy as np
+from pandas import read_csv
 from rclpy.node import Node
-from std_msgs.msg import UInt16MultiArray, Float32MultiArray, MultiArrayDimension
+from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 
 # csv_path = "/home/ced/Image_recognition_ws/output/keypoints_3d.csv"
 
@@ -12,28 +14,24 @@ class TrajectoryPlanNode(Node):
 
         # Create a subscriber to the plant_cord topic
         self.cord_subscriber = self.create_subscription(
-            UInt16MultiArray, 'plant_cords', self.traject_callback, 10)
+            Float32MultiArray, 'plant_cords', self.traject_callback, 10)
 
         # Create a publisher to the delta_cord topic
         self.cord_publisher = self.create_publisher(
             Float32MultiArray, 'delta_cords', 10)
 
         self.delta_working_level = [-500, -625]
+        self.plant_cord = [[]]
 
     def traject_callback(self, msg):
         groups_size = msg.layout.dim[0].size
         cord_size = msg.layout.dim[1].size
 
-        plant_cord = []
-        for group in range(groups_size):
-            cord = list(msg.data[group*cord_size:(group+1)*cord_size])
-            plant_cord.append(cord)
-
-        plant_cord = self.__trajectory_plan(plant_cord)
         # Generate the planned coordinates
+        self.planed_cord = self.__trajectory_plan(msg.data)
 
         # Construct Float32MultiArray message
-        self.__publish_target_cords(plant_cord)
+        self.__publish_target_cords(self.planed_cord)
 
     def __publish_target_cords(self, targets: np.ndarray):
         """
@@ -65,11 +63,11 @@ class TrajectoryPlanNode(Node):
         """
         return [float(item) for sublist in array for item in sublist]
 
-    def __trajectory_plan(self, raw_cords: list[list[float]]) -> list[list[float]]:
+    def __trajectory_plan(self, raw_cord):
 
         planed_cord = [[0, 0, 0], [0, 0, -450]]
 
-        for row in raw_cords:
+        for row in raw_cord:
             for z in self.delta_working_level:
                 planing_cord = row[:2] + [z]
                 planed_cord.append(planing_cord)

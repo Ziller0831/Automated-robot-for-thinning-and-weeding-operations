@@ -1,9 +1,6 @@
-import os
-from glob import glob
 from setuptools import find_packages, setup
 
-
-package_name = 'delta_robot'
+package_name = 'plant_detection'
 
 setup(
     name=package_name,
@@ -13,8 +10,6 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        (os.path.join('share', package_name, 'launch'),
-         glob(os.path.join('launch', '*launch.py'))),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -25,8 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'delta_robot_api = delta_robot.DeltaRobot_API:main',
-            'trajectory_plan = delta_robot.Trajectory_plan:main'
+            'plant_detector = plant_detection.plant_detection:main',
+            'photo_pub = plant_detection.photo_pub:main'
         ],
     },
 )
