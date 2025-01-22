@@ -30,7 +30,7 @@ from ultralytics import YOLO
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import UInt16MultiArray, MultiArrayDimension
+from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
@@ -54,73 +54,76 @@ class PlantDetectNode(Node):
             Image, 'image_raw', self.image_callback, 10)
 
         self.cord_publisher = self.create_publisher(
-            UInt16MultiArray, 'plant_cords', 10)
+            Float32MultiArray, 'plant_cord', 10)
         self.img_publisher = self.create_publisher(
-            Image, 'result_img', 10)
+            Image, 'plant_segmentation', 10)
 
     def image_callback(self, msg):
-        # 1. 紀錄處理開始
         self.get_logger().info(f"Processing...")
-
-        # 2. 將 ROS Image 消息轉換成 OpenCV 圖像
         image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-
-        # 3. 使用 YOLOv8 模型進行辨識
         yolo_results = self.model.predict(image, save=False, stream=False)
 
+        # @ 輸出YOLO辨識框
+        # for result in yolo_results:
+        #     for box in result.boxes:
+        #         # 解析檢測框數據
+        #         x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+        #         cls = int(box.cls[0].tolist())
+        #         conf = box.conf[0].tolist()
+        #         label = f"{cls}: {conf:.2f}"
+
+        #         # 繪製檢測框和標籤
+        #         cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        #         cv2.putText(image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX,
+        #                     0.5, (0, 255, 0), 2)
+        # self.img_publisher.publish(
+        #     self.bridge.cv2_to_imgmsg(image, "bgr8"))
+
         # @ 學彥整套流程
-        # 4. 提取 YOLO 檢測框座標
         obj_cords = self.__extract_obj_cords(yolo_results)
         if not obj_cords:
             self.get_logger().info(f"未檢測到任何植物")
             return
 
-        # 5. 分割植物
         segment_objs = self.__segment_objects(image, obj_cords)
-
-        # 6. 執行間距疏苗演算法
         saved_plants, removed_plants, weeds = self.__thinning_algorithm(
             segment_objs, self.thinning_radius)
 
-        # 7. 將結果繪製到影像上
         result_img = self.__result_display(
             image, obj_cords, saved_plants, removed_plants, weeds)
+        self.img_publisher.publish(
+            self.bridge.cv2_to_imgmsg(result_img, "bgr8"))
 
-        # 8. 發佈處理後圖像
-        self.__publish_image(result_img)
+        # removed_targets = weeds + removed_plants
 
-        # 9. 整合疏苗對象與雜草並發佈
-        removed_targets = np.concatenate((weeds, removed_plants))
-        self.__publish_target_cords(removed_targets)
+        # lst = list(weeds.values())
+        print(type(weeds))
+        print("")
+        print(type(removed_plants))
 
-    def __publish_image(self, img: np.ndarray):
+        # cord_array = Float32MultiArray()
+        # cord_array.layout = self.__create_multiarray_layout(
+        #     len(removed_plants),
+        #     len(removed_plants[0])
+        # )
+
+    def __create_multiarray_layout(self, groups: int, coords_per_group: int):
         """
-        Publish the image to the result_img topic.
+        Helper function to create the layout for Float32MultiArray.
 
-        :param img: The input image
+        :param groups: Number of groups (outer dimension)
+        :param coords_per_group: Number of coordinates per group (inner dimension)
+        :return: A populated layout object
         """
-        self.img_publisher.publish(self.bridge.cv2_to_imgmsg(img, "bgr8"))
-
-    def __publish_target_cords(self, targets: np.ndarray):
-        """
-        Publish the target coordinates to the plant_cord topic.
-        """
-        cord_array = UInt16MultiArray()
-        num_groups = len(targets)
-        num_coords = len(targets[0]) if num_groups > 0 else 0
-
-        # 設定 Layout 的維度
-        cord_array.layout.dim = [
-            MultiArrayDimension(label="group", size=num_groups,
-                                stride=num_groups * num_coords),
-            MultiArrayDimension(label="coordinate",
-                                size=num_coords, stride=num_coords)
-        ]
-        cord_array.layout.data_offset = 0
-
-        # 設定數據並發佈
-        cord_array.data = self.__flatten_2d_array(targets)
-        self.cord_publisher.publish(cord_array)
+        layout = Float32MultiArray._layout_type()
+        layout.dim.append(MultiArrayDimension(label="group",
+                                              size=groups,
+                                              stride=groups * coords_per_group))
+        layout.dim.append(MultiArrayDimension(label="coordinate",
+                                              size=coords_per_group,
+                                              stride=coords_per_group))
+        layout.data_offset = 0
+        return layout
 
     def __flatten_2d_array(self, array: list[list[float]]) -> list[float]:
         """
@@ -129,7 +132,7 @@ class PlantDetectNode(Node):
         :param array: A 2D list of floats
         :return: A flattened 1D list
         """
-        return [int(item) for sublist in array for item in sublist]
+        return [float(item) for sublist in array for item in sublist]
 
     def __generate_colors(self) -> list:
         """
@@ -260,7 +263,7 @@ class PlantDetectNode(Node):
             if segment_obj['class'] == 0:
                 plants.append(segment_obj)
             elif segment_obj['class'] == 1:
-                weeds.append([segment_obj['x'], segment_obj['y']])
+                weeds.append(segment_obj)
 
         cx_list = []
         cy_list = []
@@ -331,7 +334,7 @@ class PlantDetectNode(Node):
         for plant in removed_plants:
             cv2.circle(img, (plant[0], plant[1]), 5, self.colors[1], -1)
         for weed in weeds:
-            cv2.circle(img, (weed[0], weed[1]), 5, self.colors[2], -1)
+            cv2.circle(img, (weed['x'], weed['y']), 5, self.colors[2], -1)
 
         return img
 

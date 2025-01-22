@@ -30,7 +30,7 @@ from ultralytics import YOLO
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import UInt16MultiArray, MultiArrayDimension
+from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
@@ -54,7 +54,7 @@ class PlantDetectNode(Node):
             Image, 'image_raw', self.image_callback, 10)
 
         self.cord_publisher = self.create_publisher(
-            UInt16MultiArray, 'plant_cords', 10)
+            Float32MultiArray, 'plant_cord', 10)
         self.img_publisher = self.create_publisher(
             Image, 'result_img', 10)
 
@@ -67,6 +67,22 @@ class PlantDetectNode(Node):
 
         # 3. 使用 YOLOv8 模型進行辨識
         yolo_results = self.model.predict(image, save=False, stream=False)
+
+        # @ 輸出YOLO辨識框
+        # for result in yolo_results:
+        #     for box in result.boxes:
+        #         # 解析檢測框數據
+        #         x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+        #         cls = int(box.cls[0].tolist())
+        #         conf = box.conf[0].tolist()
+        #         label = f"{cls}: {conf:.2f}"
+
+        #         # 繪製檢測框和標籤
+        #         cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        #         cv2.putText(image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX,
+        #                     0.5, (0, 255, 0), 2)
+        # self.img_publisher.publish(
+        #     self.bridge.cv2_to_imgmsg(image, "bgr8"))
 
         # @ 學彥整套流程
         # 4. 提取 YOLO 檢測框座標
@@ -91,7 +107,7 @@ class PlantDetectNode(Node):
 
         # 9. 整合疏苗對象與雜草並發佈
         removed_targets = np.concatenate((weeds, removed_plants))
-        self.__publish_target_cords(removed_targets)
+        self.__publish_target_coordinates(removed_targets)
 
     def __publish_image(self, img: np.ndarray):
         """
@@ -105,7 +121,7 @@ class PlantDetectNode(Node):
         """
         Publish the target coordinates to the plant_cord topic.
         """
-        cord_array = UInt16MultiArray()
+        cord_array = Float32MultiArray()
         num_groups = len(targets)
         num_coords = len(targets[0]) if num_groups > 0 else 0
 
@@ -129,7 +145,7 @@ class PlantDetectNode(Node):
         :param array: A 2D list of floats
         :return: A flattened 1D list
         """
-        return [int(item) for sublist in array for item in sublist]
+        return [float(item) for sublist in array for item in sublist]
 
     def __generate_colors(self) -> list:
         """

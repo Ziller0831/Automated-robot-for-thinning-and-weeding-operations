@@ -1,28 +1,3 @@
-"""
-植栽辨識與疏苗算法主程式
-
-Architecture:
-class PlantDetectNode
-|
-+-- def __init__(self)
-|
-+-- def image_callback(self, msg)
-|
-+-- def __create_multiarray_layout(self, groups: int, coords_per_group: int)
-|
-+-- def __flatten_2d_array(self, array: list[list[float]]) -> list[float]
-|
-+-- def __generate_colors(self) -> list
-|
-+-- def __extract_obj_cords(self, yolo_results: list) -> dict
-|
-+-- def __segment_objects(self, img: np.ndarray, obj_cords: list) -> list
-|
-+-- def __thinning_algorithm(self, segment_objs: list, radius: float)
-|
-+-- def __result_display(self, img: np.ndarray, obj_cords: list, saved_plants: list, removed_plants: list, weeds: list)
-"""
-
 import cv2
 import numpy as np
 from ultralytics import YOLO
@@ -30,9 +5,11 @@ from ultralytics import YOLO
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import UInt16MultiArray, MultiArrayDimension
+from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
+
+remove_plants = Float32MultiArray()
 
 MODEL_PATH = "/home/ced/Image_recognition_ws/datasets/model/train134/weights/best.pt"
 
@@ -54,82 +31,63 @@ class PlantDetectNode(Node):
             Image, 'image_raw', self.image_callback, 10)
 
         self.cord_publisher = self.create_publisher(
-            UInt16MultiArray, 'plant_cords', 10)
+            Float32MultiArray, 'plant_cord', 10)
         self.img_publisher = self.create_publisher(
-            Image, 'result_img', 10)
+            Image, 'plant_segmentation', 10)
 
     def image_callback(self, msg):
-        # 1. 紀錄處理開始
         self.get_logger().info(f"Processing...")
-
-        # 2. 將 ROS Image 消息轉換成 OpenCV 圖像
         image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-
-        # 3. 使用 YOLOv8 模型進行辨識
         yolo_results = self.model.predict(image, save=False, stream=False)
 
+        # @ 輸出YOLO辨識框
+        # for result in yolo_results:
+        #     for box in result.boxes:
+        #         # 解析檢測框數據
+        #         x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+        #         cls = int(box.cls[0].tolist())
+        #         conf = box.conf[0].tolist()
+        #         label = f"{cls}: {conf:.2f}"
+
+        #         # 繪製檢測框和標籤
+        #         cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        #         cv2.putText(image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX,
+        #                     0.5, (0, 255, 0), 2)
+        # self.img_publisher.publish(
+        #     self.bridge.cv2_to_imgmsg(image, "bgr8"))
+
         # @ 學彥整套流程
-        # 4. 提取 YOLO 檢測框座標
         obj_cords = self.__extract_obj_cords(yolo_results)
         if not obj_cords:
             self.get_logger().info(f"未檢測到任何植物")
             return
 
-        # 5. 分割植物
         segment_objs = self.__segment_objects(image, obj_cords)
-
-        # 6. 執行間距疏苗演算法
-        saved_plants, removed_plants, weeds = self.__thinning_algorithm(
+        filtered_plants, removed_plants, weeds = self.__thinning_algorithm(
             segment_objs, self.thinning_radius)
 
-        # 7. 將結果繪製到影像上
         result_img = self.__result_display(
-            image, obj_cords, saved_plants, removed_plants, weeds)
+            image, obj_cords, filtered_plants, removed_plants, weeds)
+        self.img_publisher.publish(
+            self.bridge.cv2_to_imgmsg(result_img, "bgr8"))
 
-        # 8. 發佈處理後圖像
-        self.__publish_image(result_img)
-
-        # 9. 整合疏苗對象與雜草並發佈
-        removed_targets = np.concatenate((weeds, removed_plants))
-        self.__publish_target_cords(removed_targets)
-
-    def __publish_image(self, img: np.ndarray):
+    def __create_multiarray_layout(self, groups: int, coords_per_group: int) -> Float32MultiArray._layout_type:
         """
-        Publish the image to the result_img topic.
+        Helper function to create the layout for Float32MultiArray.
 
-        :param img: The input image
+        :param groups: Number of groups (outer dimension)
+        :param coords_per_group: Number of coordinates per group (inner dimension)
+        :return: A populated layout object
         """
-        self.img_publisher.publish(self.bridge.cv2_to_imgmsg(img, "bgr8"))
-
-    def __publish_target_cords(self, targets: np.ndarray):
-        """
-        Publish the target coordinates to the plant_cord topic.
-        """
-        cord_array = UInt16MultiArray()
-        num_groups = len(targets)
-        num_coords = len(targets[0]) if num_groups > 0 else 0
-
-        # 設定 Layout 的維度
-        cord_array.layout.dim = [
-            MultiArrayDimension(label="group", size=num_groups,
-                                stride=num_groups * num_coords),
-            MultiArrayDimension(label="coordinate",
-                                size=num_coords, stride=num_coords)
-        ]
-        cord_array.layout.data_offset = 0
-
-        # 設定數據並發佈
-        cord_array.data = self.__flatten_2d_array(targets)
-        self.cord_publisher.publish(cord_array)
-
-    def __flatten_2d_array(self, array: list[list[float]]) -> list[float]:
-        """
-        Helper function to flatten a 2D list into a 1D list.
-
-        :param array: A 2D list of floats
-        :return: A flattened 1D list
-        """
-        return [int(item) for sublist in array for item in sublist]
+        layout = Float32MultiArray._layout_type()
+        layout.dim.append(MultiArrayDimension(label="group",
+                                              size=groups,
+                                              stride=groups * coords_per_group))
+        layout.dim.append(MultiArrayDimension(label="coordinate",
+                                              size=coords_per_group,
+                                              stride=coords_per_group))
+        layout.data_offset = 0
+        return layout
 
     def __generate_colors(self) -> list:
         """
@@ -144,13 +102,11 @@ class PlantDetectNode(Node):
         ]
         return colors
 
-    def __extract_obj_cords(self, yolo_results: list) -> dict:
-        """
-        Extract object coordinates from YOLO results.
+    def get_cord(self):
+        plant_cord = [[100, 100, -550]]
+        return plant_cord
 
-        :param yolo_results: A list of YOLO results
-        :return: A dictionary of object coordinates
-        """
+    def __extract_obj_cords(self, yolo_results: list):
         obj_cords = {}
         for result in yolo_results:
             if result:
@@ -177,15 +133,9 @@ class PlantDetectNode(Node):
                     }
         return obj_cords
 
-    def __segment_objects(self, img: np.ndarray, obj_cords: list) -> list:
-        """
-        Segment objects from the image.
-
-        :param img: The input image
-        :param obj_cords: A list of object coordinates
-        :return: A list of segmented objects
-        """
+    def __segment_objects(self, img: np.ndarray, obj_cords: list):
         segment_objs = []
+        color = self.colors[2]
 
         for obj_name, obj_cord in obj_cords.items():
             x = int(obj_cord["x"])
@@ -239,28 +189,22 @@ class PlantDetectNode(Node):
                     center_x = int(moment["m10"] / moment["m00"])
                     center_y = int(moment["m01"] / moment["m00"])
                     segment_objs.append({
-                        'class': cls,
+                        'Object Name': f"{obj_name}_contour",
                         'x': x1 + center_x,
-                        'y': y1 + center_y
+                        'y': y1 + center_y,
+                        'class': cls
                     })
 
         return segment_objs
 
     def __thinning_algorithm(self, segment_objs: list, radius: float):
-        """
-        Thinning algorithm to remove overlapped objects.
-
-        :param segment_objs: A list of segmented objects
-        :param radius: The radius for thinning
-        :return: A tuple of saved plants, removed plants, and weeds
-        """
         plants = []
         weeds = []
         for segment_obj in segment_objs:
             if segment_obj['class'] == 0:
                 plants.append(segment_obj)
             elif segment_obj['class'] == 1:
-                weeds.append([segment_obj['x'], segment_obj['y']])
+                weeds.append(segment_obj)
 
         cx_list = []
         cy_list = []
@@ -277,36 +221,26 @@ class PlantDetectNode(Node):
             lambda point: (-point[1], -point[1])
         ]
         max_points = 0
-        best_saved_plants = None
+        best_filtered_plants = None
         best_removed_plants = None
 
         for sorting_method in sorting_methods:
             sorted_random_points = sorted(random_points, key=sorting_method)
-            saved_plants = []
+            filtered_plants = []
             removed_plants = []
             for point in sorted_random_points:
-                if all(np.linalg.norm(point - other_point) >= radius for other_point in saved_plants):
-                    saved_plants.append(point)
+                if all(np.linalg.norm(point - other_point) >= radius for other_point in filtered_plants):
+                    filtered_plants.append(point)
                 else:
                     removed_plants.append(point)
-            if len(saved_plants) > max_points:
-                max_points = len(saved_plants)
-                best_saved_plants = saved_plants
+            if len(filtered_plants) > max_points:
+                max_points = len(filtered_plants)
+                best_filtered_plants = filtered_plants
                 best_removed_plants = removed_plants
 
-            return np.array(best_saved_plants), np.array(best_removed_plants), np.array(weeds)
+            return np.array(best_filtered_plants), np.array(best_removed_plants), weeds
 
-    def __result_display(self, img: np.ndarray, obj_cords: list, saved_plants: list, removed_plants: list, weeds: list):
-        """
-        Display the results on the image.
-
-        :param img: The input image
-        :param obj_cords: A list of object coordinates
-        :param saved_plants: A list of saved plant coordinates
-        :param removed_plants: A list of removed plant coordinates
-        :param weeds: A list of weed coordinates
-        :return: The image with results
-        """
+    def __result_display(self, img: np.ndarray, obj_cords: list, filtered_plants: list, removed_plants: list, weeds: list):
         for _, obj_cord in obj_cords.items():
             x = int(obj_cord['x'])
             y = int(obj_cord['y'])
@@ -326,12 +260,12 @@ class PlantDetectNode(Node):
                 cv2.putText(img, f"W {obj_cord['conf']*100:.1f}%",
                             (bx1, by1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.2, color, 3)
 
-        for plant in saved_plants:
+        for plant in filtered_plants:
             cv2.circle(img, (plant[0], plant[1]), 5, self.colors[0], -1)
         for plant in removed_plants:
             cv2.circle(img, (plant[0], plant[1]), 5, self.colors[1], -1)
         for weed in weeds:
-            cv2.circle(img, (weed[0], weed[1]), 5, self.colors[2], -1)
+            cv2.circle(img, (weed['x'], weed['y']), 5, self.colors[2], -1)
 
         return img
 

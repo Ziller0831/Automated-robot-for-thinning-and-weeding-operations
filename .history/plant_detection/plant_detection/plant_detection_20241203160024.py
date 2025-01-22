@@ -30,7 +30,7 @@ from ultralytics import YOLO
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import UInt16MultiArray, MultiArrayDimension
+from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
@@ -54,7 +54,7 @@ class PlantDetectNode(Node):
             Image, 'image_raw', self.image_callback, 10)
 
         self.cord_publisher = self.create_publisher(
-            UInt16MultiArray, 'plant_cords', 10)
+            Float32MultiArray, 'plant_cord', 10)
         self.img_publisher = self.create_publisher(
             Image, 'result_img', 10)
 
@@ -105,7 +105,7 @@ class PlantDetectNode(Node):
         """
         Publish the target coordinates to the plant_cord topic.
         """
-        cord_array = UInt16MultiArray()
+        cord_array = Float32MultiArray()
         num_groups = len(targets)
         num_coords = len(targets[0]) if num_groups > 0 else 0
 
@@ -129,7 +129,7 @@ class PlantDetectNode(Node):
         :param array: A 2D list of floats
         :return: A flattened 1D list
         """
-        return [int(item) for sublist in array for item in sublist]
+        return [float(item) for sublist in array for item in sublist]
 
     def __generate_colors(self) -> list:
         """
